@@ -11,6 +11,26 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 30.0
     day_ahead_cutoff_hour: int = 10
     enable_snapshot_fallback: bool = True
+    cors_origins: str = ""
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        import os
+        origins = [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+        raw = self.cors_origins or os.getenv("CORS_ORIGINS", "")
+        if raw:
+            for item in raw.split(","):
+                cleaned = item.strip().rstrip("/")
+                if cleaned and cleaned not in origins:
+                    origins.append(cleaned)
+        return origins
 
     model_config = SettingsConfigDict(
         env_prefix="WIND_",

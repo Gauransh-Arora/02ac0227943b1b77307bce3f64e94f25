@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: aeris-wind-forecast-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.9
+      - key: WIND_APP_NAME
+        value: Wind Forecast Intelligence API
+      - key: WIND_ENABLE_SNAPSHOT_FALLBACK
+        value: "true"
+      - key: WIND_DAY_AHEAD_CUTOFF_HOUR
+        value: "10"
+      - key: WIND_REQUEST_TIMEOUT_SECONDS
+        value: "30.0"
+      - key: WIND_CORS_ORIGINS
+        sync: false

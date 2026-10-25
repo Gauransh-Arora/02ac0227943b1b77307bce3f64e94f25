@@ -1,8 +1,13 @@
-// In production, always use relative URLs ("") so requests route through the reverse proxy.
-// In development, fall back to VITE_API_BASE_URL or empty string (Vite dev proxy).
-const API_BASE_URL = import.meta.env.PROD
-  ? ""
-  : (import.meta.env.VITE_API_BASE_URL ?? "");
+// If VITE_API_BASE_URL is explicitly configured (e.g., deployed frontend on Vercel pointing
+// to the Render backend service), use it with trailing slashes stripped.
+// Otherwise (local Docker Compose where Nginx reverse-proxies /api/ or Vite dev proxy),
+// fall back to relative URLs ("") to preserve local proxy routing.
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL =
+  typeof rawApiBaseUrl === "string" && rawApiBaseUrl.trim() !== ""
+    ? rawApiBaseUrl.trim().replace(/\/+$/, "")
+    : "";
+
 
 export interface OverviewResponse {
   period: {

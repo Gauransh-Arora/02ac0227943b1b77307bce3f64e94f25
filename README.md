@@ -7,11 +7,12 @@
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org)
 [![uv](https://img.shields.io/badge/package__manager-uv-DE5FE9.svg)](https://github.com/astral-sh/uv)
-[![Tests](https://img.shields.io/badge/tests-29%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-32%20passed-brightgreen.svg)]()
 
 ---
 
 ## 1. Executive Summary & Value Proposition
+
 
 **AERIS — Wind Forecast Intelligence** is an analytics platform engineered to evaluate the precision, systemic bias, and operational reliability of Great Britain’s national wind power generation forecasts throughout January 2026. 
 
@@ -66,7 +67,7 @@ AERIS ingests official settlement-grade data from the **Elexon Balancing Mechani
 | | `pnpm` | Fast, disk-efficient Node.js package manager with frozen lockfiles |
 | **Container & Ops** | Docker & Docker Compose | Multi-stage container builds and unified local deployment |
 | | Nginx (Alpine) | Production web server, static asset caching, and reverse proxy |
-| | Pytest | Automated test suite (29 tests covering API, metrics, and processing) |
+| | Pytest | Automated test suite (32 tests covering API, metrics, CORS, and processing) |
 
 ---
 
@@ -177,11 +178,19 @@ $$\text{Bias} = \frac{1}{N} \sum_{i=1}^{N} (F_i - A_i)$$
 
 ---
 
-## 8. Docker & Production Deployment
+## 8. Deployment Architecture & Hosting Options
 
-The entire application is fully containerized and orchestrated via Docker Compose.
+AERIS supports two production deployment architectures:
+1. **Local Container Orchestration (Docker Compose)**: Multi-container setup with Nginx reverse proxy for local testing and evaluator audits.
+2. **Free Cloud Tier Deployment (Vercel + Render)**: Production deployment using free-tier hosting only (**React + Vite SPA on Vercel Hobby** and **FastAPI ASGI Backend on Render Free Web Service**).
 
-### Quick Start
+---
+
+### 8.1 Local Docker Compose Deployment
+
+The application is containerized with multi-stage builds and unified internal bridge networking (`aeris-network`):
+
+#### Quick Start
 ```bash
 # 1. Clone the repository
 git clone <repository-url>
@@ -198,7 +207,7 @@ The application will be live at:
 - **Frontend Dashboard**: [http://localhost:8080](http://localhost:8080)
 - **Backend API (Direct access)**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
-### Lifecycle Management
+#### Lifecycle Management
 ```bash
 # View real-time container logs
 docker compose logs -f
@@ -209,6 +218,189 @@ docker compose restart
 # Stop and tear down containers and network
 docker compose down
 ```
+
+---
+
+### 8.2 Free Cloud Deployment Guide (Vercel + Render)
+
+This project is engineered to run on free-tier cloud hosting without paid services, credit cards, or trial lock-ins:
+- **Frontend**: [Vercel](https://vercel.com/) (Hobby plan — free forever for personal/non-commercial projects).
+- **Backend**: [Render](https://render.com/) (Free Web Service plan — 512 MB RAM, shared CPU).
+
+```mermaid
+flowchart LR
+    subgraph Client["Client Browser"]
+        Browser["User Browser"]
+    end
+
+    subgraph Vercel["Vercel (Hobby Tier)"]
+        SPA["Vite + React 19 SPA<br/>(Static Edge CDN)"]
+    end
+
+    subgraph Render["Render (Free Web Service)"]
+        API["FastAPI App (Python 3.12 / Uvicorn)<br/>Port: $PORT | Host: 0.0.0.0"]
+        Snapshot["Historical Snapshot Fallback<br/>(january_2026_snapshot.json.gz)"]
+    end
+
+    subgraph External["External Services"]
+        BMRS["Elexon BMRS API<br/>https://data.elexon.co.uk/bmrs/api/v1"]
+    end
+
+    Browser -->|"HTTPS (SPA Load)"| SPA
+    Browser -->|"Direct HTTPS REST Calls (CORS)"| API
+    API -->|"Real-time stream"| BMRS
+    API -.->|"Cold-Start / Outage Fallback"| Snapshot
+```
+
+#### Step 1: Deploy Backend to Render (Free Web Service)
+
+You can provision the Render backend using either the included `render.yaml` Blueprint or the manual web dashboard.
+
+##### Method A: Deploy via Blueprint (`render.yaml` — Recommended)
+1. Fork or push this repository to your GitHub account.
+2. Sign in to the [Render Dashboard](https://dashboard.render.com/).
+3. Click **New +** and select **Blueprint**.
+4. Connect your GitHub repository. Render will automatically parse [render.yaml](file:///home/gauransh-arora/Projects/wind-forecast-portal/render.yaml) at the repository root.
+5. Review the detected service specifications:
+   - **Service Name**: `aeris-wind-forecast-backend`
+   - **Service Type**: `Web Service`
+   - **Root Directory**: `backend`
+   - **Runtime**: `Python`
+   - **Plan**: `Free`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Health Check Path**: `/api/health`
+6. Click **Apply**. Render will trigger the initial build and deploy.
+7. Once deployed, copy your assigned Render service URL (e.g., `https://aeris-wind-forecast-backend.onrender.com`).
+
+##### Method B: Manual Dashboard Web Service Setup
+If not using Blueprints, configure the Web Service manually:
+1. In the Render Dashboard, click **New +** > **Web Service**.
+2. Connect your GitHub repository.
+3. Configure the exact deployment parameters:
+   - **Name**: `aeris-wind-forecast-backend`
+   - **Region**: Oregon (US West) or Frankfurt (EU Central)
+   - **Branch**: `main`
+   - **Root Directory**: `backend` *(CRITICAL: monorepo subfolder)*
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Instance Type**: `Free`
+4. Expand **Advanced Settings**:
+   - **Health Check Path**: `/api/health`
+   - **Auto-Deploy**: `Yes`
+5. Under **Environment Variables**, define:
+   | Key | Value | Notes |
+   | :--- | :--- | :--- |
+   | `PYTHON_VERSION` | `3.12.9` | Pins Python 3.12 runtime |
+   | `WIND_APP_NAME` | `Wind Forecast Intelligence API` | Service display name |
+   | `WIND_ENABLE_SNAPSHOT_FALLBACK` | `true` | Ensures zero downtime if Elexon API is unreachable |
+   | `WIND_DAY_AHEAD_CUTOFF_HOUR` | `10` | 10:00 Europe/London cutoff assumption |
+   | `WIND_REQUEST_TIMEOUT_SECONDS` | `30.0` | Upstream Elexon request timeout |
+   | `WIND_CORS_ORIGINS` | Leave empty initially | Set in Step 3 once Vercel URL is known |
+6. Click **Create Web Service**.
+
+> [!NOTE]
+> **Render Free Instance Spin-Down Behavior**: Render spins down free Web Services after 15 minutes of inactivity. When a request arrives, Render awakens the service within 30–50 seconds. Because the verified historical snapshot is bundled directly with the application (`backend/app/data/january_2026_snapshot.json.gz`), the API responds immediately without cold-start timeouts.
+
+---
+
+#### Step 2: Deploy Frontend to Vercel (Hobby Tier)
+
+1. Sign in to [Vercel](https://vercel.com/) with your GitHub account.
+2. Click **Add New...** > **Project**.
+3. Locate and import your `wind-forecast-portal` repository.
+4. In the **Configure Project** modal:
+   - **Project Name**: `aeris-wind-forecast-portal` (or your preferred name)
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: Click **Edit** and choose `frontend` *(CRITICAL: select `frontend` directory)*
+5. The build and output settings automatically configure to:
+   - **Build Command**: `pnpm build` (or `npm run build`)
+   - **Output Directory**: `dist`
+   - **Install Command**: `pnpm install` (or `npm install`)
+6. Expand **Environment Variables** and configure:
+   - **Name**: `VITE_API_BASE_URL`
+   - **Value**: `https://<your-render-backend-name>.onrender.com` *(use your live Render backend URL from Step 1, without trailing slash)*
+7. Click **Deploy**. Vercel will install dependencies, compile the production assets, and provision a live URL (e.g., `https://aeris-wind-forecast-portal.vercel.app`).
+
+---
+
+#### Step 3: Link Vercel Production Origin to Render CORS
+
+To enforce strict cross-origin security while allowing your deployed frontend:
+1. Copy your assigned Vercel URL (e.g., `https://aeris-wind-forecast-portal.vercel.app`).
+2. Navigate to your backend service in the **Render Dashboard** > **Environment**.
+3. Set or update `WIND_CORS_ORIGINS`:
+   ```text
+   WIND_CORS_ORIGINS=https://aeris-wind-forecast-portal.vercel.app
+   ```
+   *(Multiple domains can be separated with commas, e.g. if testing custom domains or Vercel preview URLs).*
+4. Click **Save Changes**. Render will automatically redeploy the service with updated CORS policies.
+
+---
+
+#### Step 4: Verification of Live Endpoints
+
+Once both services are active, verify application functionality with these validation steps:
+
+##### 1. Backend Health Check
+```bash
+curl -i "https://<your-render-backend>.onrender.com/api/health"
+```
+**Expected Response**: `200 OK`
+```json
+{
+  "status": "ok",
+  "service": "Wind Forecast Intelligence API"
+}
+```
+
+##### 2. Monthly Overview & KPI Verification
+```bash
+curl -i "https://<your-render-backend>.onrender.com/api/overview"
+```
+**Expected Response**: `200 OK`
+- Contains `period.start: "2026-01-01"`, `period.end: "2026-01-31"`
+- `actual_records: 1488` (or snapshot records)
+- `selected_forecast_records: 744`
+- `accuracy.matched_periods: 744`
+- `mae_mw ≈ 2107.18`, `rmse_mw ≈ 2611.24`, `bias_mw ≈ 1839.92`
+
+##### 3. Time Series & Ranking Verification
+```bash
+curl -i "https://<your-render-backend>.onrender.com/api/overview/series"
+```
+**Expected Response**: `200 OK`
+- `total_periods: 744`
+- `hourly_series`: 744 hourly items with `startTime`, `publishTime`, `forecast_mw`, `actual_mw`, and `error_mw`.
+- `daily_accuracy`: 31 daily items (Jan 1 through Jan 31).
+- `largest_errors`: Top 15 ranked hourly errors.
+
+##### 4. Granular Daily Forecast Verification
+```bash
+curl -i "https://<your-render-backend>.onrender.com/api/forecasts?date=2026-01-15"
+```
+**Expected Response**: `200 OK`
+- `date: "2026-01-15"`
+- `forecast_periods`: 24 hourly periods with `startTime`, `publishTime`, and `generation_mw`.
+
+##### 5. Granular Daily Accuracy Verification
+```bash
+curl -i "https://<your-render-backend>.onrender.com/api/accuracy?date=2026-01-15"
+```
+**Expected Response**: `200 OK`
+- `date: "2026-01-15"`
+- `matched_periods: 24`
+- `mae_mw ≈ 1093.6`, `bias_mw ≈ 1093.6`
+- `periods`: 24 hourly periods with actual vs forecast comparison.
+
+##### 6. Full End-to-End Frontend Verification
+1. Open `https://<your-vercel-project>.vercel.app` in your web browser.
+2. Verify that the Executive KPI Cards (MAE, RMSE, Net Bias, Coverage) render with live numbers (no empty or loading placeholders).
+3. Confirm the interactive 744-hour Generation Chart displays both Forecast and Actual series with working hover tooltips and range zoom.
+4. Switch to the **Daily Heatmap & Ranking** and click on any day (e.g. Jan 15) to jump into the **Forecast Explorer**.
+5. Check browser developer tools (F12 > Network tab) to confirm API calls resolve with status `200 OK` and without CORS origin errors.
+
 
 ---
 
@@ -248,6 +440,8 @@ Frontend development server will open at `http://127.0.0.1:5173`.
 
 All settings use Pydantic Settings with the `WIND_` environment prefix. Default values are pre-configured for out-of-the-box operation:
 
+### Backend Environment Variables (Pydantic Settings with `WIND_` prefix)
+
 | Environment Variable | Default Value | Description |
 | :--- | :--- | :--- |
 | `WIND_APP_NAME` | `"Wind Forecast Intelligence API"` | Application identifier string |
@@ -257,6 +451,14 @@ All settings use Pydantic Settings with the `WIND_` environment prefix. Default 
 | `WIND_DELIVERY_END` | `"2026-02-01T00:00:00Z"` | Analysis end delivery timestamp (ISO 8601 UTC) |
 | `WIND_REQUEST_TIMEOUT_SECONDS`| `30.0` | Timeout in seconds for upstream HTTP requests |
 | `WIND_ENABLE_SNAPSHOT_FALLBACK`| `true` | If true, loads verified local snapshot if Elexon API is unreachable |
+| `WIND_CORS_ORIGINS` | `""` | Comma-separated allowed external origins (e.g. Vercel deployment URL). Local origins are always preserved. |
+
+### Frontend Environment Variables (Vite `VITE_` prefix)
+
+| Environment Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `VITE_API_BASE_URL` | `""` (relative) | Base URL for the FastAPI backend (e.g. `https://aeris-backend.onrender.com` on Vercel). Leave empty for Docker Compose and Vite dev proxy. |
+
 
 ---
 
@@ -407,8 +609,8 @@ pnpm --dir frontend lint
 pnpm --dir frontend build
 ```
 
-### Test Suite Summary (29 Tests)
-- **`tests/test_api.py` (10 tests)**: Verifies `/api/health`, `/api/overview`, `/api/overview/series`, `/api/forecasts`, `/api/accuracy`, date validation bounds, and 502 error forwarding.
+### Test Suite Summary (32 Tests)
+- **`tests/test_api.py` (13 tests)**: Verifies `/api/health`, `/api/overview`, `/api/overview/series`, `/api/forecasts`, `/api/accuracy`, date validation bounds, CORS origin filtering & rejection, and 502 error forwarding.
 - **`tests/test_metrics.py` (8 tests)**: Verifies mathematical correctness of MAE, RMSE, and Bias sign conventions, handling of zero error, all-positive, all-negative, and NaN/missing data.
 - **`tests/test_processing.py` (11 tests)**: Verifies day-ahead cutoff filtering, timezone handling (`Europe/London` vs `UTC`), revision deduplication, and 1-to-1 inner join alignment.
 
@@ -419,6 +621,7 @@ pnpm --dir frontend build
 ```
 wind-forecast-portal/
 ├── docker-compose.yml              # Root container orchestration specification
+├── render.yaml                     # Render Blueprint infrastructure specification
 ├── .gitignore                      # Git exclusion rules
 ├── README.md                       # Comprehensive project documentation
 ├── AI_USE.md                       # AI usage and assistance disclosure
@@ -429,6 +632,7 @@ wind-forecast-portal/
 │   ├── .dockerignore               # Backend Docker build exclusions
 │   ├── pyproject.toml              # Python project metadata and dependencies
 │   ├── uv.lock                     # Deterministic dependency lockfile
+│   ├── requirements.txt            # Locked pip dependencies for Render deployment
 │   ├── app/
 │   │   ├── config.py               # Pydantic BaseSettings environment configuration
 │   │   ├── main.py                 # FastAPI application routes and dependency injection
@@ -450,8 +654,10 @@ wind-forecast-portal/
     ├── package.json                # Frontend package configuration and scripts
     ├── pnpm-lock.yaml              # Frozen dependency lockfile
     ├── vite.config.ts              # Vite configuration and dev server proxy
+    ├── vercel.json                 # Vercel SPA routing rewrite rules
     ├── index.html                  # HTML entry point with typography imports
     └── src/
+
         ├── App.tsx                 # Root component with tab navigation state
         ├── index.css               # Design system tokens and Tailwind CSS imports
         ├── lib/

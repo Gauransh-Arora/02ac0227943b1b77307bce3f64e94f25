@@ -22,5 +22,6 @@ COPY app ./app
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run uvicorn on all network interfaces
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn on all network interfaces, respecting PORT env var if provided
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+

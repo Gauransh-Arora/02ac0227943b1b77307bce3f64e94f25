@@ -39,8 +39,8 @@ This checklist provides a structured, pre-submission audit covering code quality
 ## 2. Validation, Testing & Deployment
 
 - [x] **Automated Test Suite**:
-  - [x] All 29 backend tests passing (`uv run --directory backend pytest`).
-  - [x] Tests cover edge cases: missing periods, zero errors, timezone conversions, leap/month boundaries, and 502 error forwarding.
+  - [x] All 32 backend tests passing (`uv run --directory backend pytest`).
+  - [x] Tests cover edge cases: missing periods, zero errors, timezone conversions, leap/month boundaries, CORS origin whitelisting & rejection, and 502 error forwarding.
   - [x] No skipped or artificially mocked passes.
 
 - [x] **Frontend Linting & Production Build**:
@@ -48,9 +48,10 @@ This checklist provides a structured, pre-submission audit covering code quality
   - [x] TypeScript builds cleanly with zero diagnostics (`tsc -b`).
   - [x] Production bundle successfully builds (`pnpm --dir frontend build`).
   - [x] Static bundle inspected to ensure no hardcoded `127.0.0.1:8000` or `localhost:8000` URLs are compiled into client JS.
+  - [x] `frontend/vercel.json` added for clean client-side SPA routing.
 
-- [x] **Containerization & Docker Health**:
-  - [x] `backend/Dockerfile` builds cleanly using multi-stage `python:3.12-slim` + `uv`.
+- [x] **Containerization & Docker Health (Local Evaluation)**:
+  - [x] `backend/Dockerfile` builds cleanly using multi-stage `python:3.12-slim` + `uv`, supporting dynamic `$PORT` binding.
   - [x] `frontend/Dockerfile` builds cleanly using multi-stage `node:22-alpine` + `nginx:alpine`.
   - [x] `docker-compose.yml` orchestrates both services on an internal bridge network (`aeris-network`).
   - [x] Backend container health check (`urllib.request` on `/api/health`) reaches `healthy` status.
@@ -58,6 +59,14 @@ This checklist provides a structured, pre-submission audit covering code quality
   - [x] Nginx reverse proxy successfully forwards `/api/...` traffic to `http://backend:8000/api/` with query string preservation.
   - [x] Container restart repeatability verified via `docker compose restart`.
   - [x] Clean teardown and recreation verified via `docker compose down && docker compose up -d`.
+
+- [x] **Cloud Deployment Readiness (Free Tier: Vercel + Render)**:
+  - [x] Frontend configured for Vercel deployment with dynamic `VITE_API_BASE_URL` environment variable support while preserving relative `/api/` fallback for local Docker Compose.
+  - [x] Backend configured for Render Free Web Service with dynamic `0.0.0.0:$PORT` binding and `/api/health` health check path.
+  - [x] `backend/requirements.txt` generated from pinned lockfile for seamless pip installation on Render.
+  - [x] `render.yaml` Blueprint added to repository root configuring backend service, Python 3.12, build/start commands, and health check.
+  - [x] Strict CORS origin validation implemented via `WIND_CORS_ORIGINS` setting, preserving local development origins and disallowing arbitrary wildcard origins.
+  - [x] Snapshot fallback file (`backend/app/data/january_2026_snapshot.json.gz`) verified tracked by Git and resilient to Elexon API outages.
 
 - [x] **Security & Credentials Audit**:
   - [x] `.dockerignore` files present in both `backend/` and `frontend/` excluding `.git`, `.venv`, `node_modules`, `dist`, and `.env`.
@@ -80,9 +89,16 @@ This checklist provides a structured, pre-submission audit covering code quality
   - [ ] Default branch set to `main` with all files committed.
   - [ ] GitHub repository description and tags added (`fastapi`, `react`, `wind-energy`, `elexon-bmrs`, `docker`).
 
-- [ ] **Live Deployment (If Applicable)**:
-  - [ ] Cloud deployment URL tested and returning HTTP 200 (if deployed to AWS/GCP/Render/Fly.io).
-  - [ ] *Note: If submitting local Docker Compose only, confirm that `docker compose up --build -d` runs out-of-the-box on port 8080.*
+- [ ] **Live Cloud Deployment Execution & Verification (Vercel + Render)**:
+  - [ ] *Status: Pending User Dashboard Deployment (do not mark checked until live deployment is verified)*
+  - [ ] Render Free Web Service deployed from `backend` using `render.yaml` Blueprint or manual Web Service setup.
+  - [ ] Live Render health probe verified: `curl -i "https://<your-backend>.onrender.com/api/health"` returns HTTP 200 OK.
+  - [ ] Live Render overview endpoint verified: `curl -i "https://<your-backend>.onrender.com/api/overview"` returns HTTP 200 OK (744 matched periods).
+  - [ ] Live Render daily endpoints verified: `curl -i "https://<your-backend>.onrender.com/api/forecasts?date=2026-01-15"` and `curl -i "https://<your-backend>.onrender.com/api/accuracy?date=2026-01-15"` return HTTP 200 OK.
+  - [ ] Vercel Hobby frontend deployed from `frontend` with `VITE_API_BASE_URL` set to the live Render backend URL.
+  - [ ] Render `WIND_CORS_ORIGINS` environment variable updated with the live Vercel production URL (e.g. `https://<your-project>.vercel.app`).
+  - [ ] End-to-end browser verification completed on the live Vercel domain: KPI cards render, charts display, date navigation functions, and DevTools Network tab shows 200 OK with zero CORS errors.
+  - [ ] *Local Docker Fallback Confirmation: Verified that `docker compose up --build -d` runs out-of-the-box on port 8080.*
 
 - [ ] **Demonstration Video Recording**:
   - [ ] Video recorded following `DEMO_VIDEO_OUTLINE.md`.
@@ -95,4 +111,5 @@ This checklist provides a structured, pre-submission audit covering code quality
   - [ ] Public GitHub repository link entered and verified.
   - [ ] Unlisted YouTube video link entered and verified.
   - [ ] Live deployment link entered (or local Docker instructions noted).
-  - [ ] Confirmation that all required files (`README.md`, `AI_USE.md`, `DEMO_VIDEO_OUTLINE.md`, `SUBMISSION_CHECKLIST.md`) are present at repository root.
+  - [ ] Confirmation that all required files (`README.md`, `AI_USE.md`, `DEMO_VIDEO_OUTLINE.md`, `SUBMISSION_CHECKLIST.md`, `render.yaml`) are present at repository root.
+

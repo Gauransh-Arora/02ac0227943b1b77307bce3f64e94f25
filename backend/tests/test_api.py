@@ -183,3 +183,34 @@ def test_upstream_elexon_snapshot_fallback(monkeypatch):
     assert response.json()["actual_records"] == 1488
     assert response.json()["accuracy"]["matched_periods"] == 744
 
+
+def test_cors_allowed_local_origin():
+    client = TestClient(app)
+    response = client.get(
+        "/api/health",
+        headers={"Origin": "http://localhost:8080"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:8080"
+
+
+def test_cors_disallowed_origin():
+    client = TestClient(app)
+    response = client.get(
+        "/api/health",
+        headers={"Origin": "https://malicious-site.example.com"},
+    )
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_settings_allowed_cors_origins_parsing(monkeypatch):
+    from app.config import Settings
+    s = Settings(cors_origins="https://my-vercel-app.vercel.app, https://custom-domain.com/")
+    origins = s.allowed_cors_origins
+    assert "http://localhost:8080" in origins
+    assert "http://localhost:5173" in origins
+    assert "https://my-vercel-app.vercel.app" in origins
+    assert "https://custom-domain.com" in origins
+
+
